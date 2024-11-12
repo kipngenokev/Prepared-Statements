@@ -61,4 +61,11 @@ public class Main {
         }
         return foundData;
     }
+
+    private static int addArtist(PreparedStatement ps,Connection connection,
+                                 String artistName,) throws SQLException{
+        int artistId = -1;
+        ps.setString(1,artistName);
+        int insertedCount = 
+    }
 }
