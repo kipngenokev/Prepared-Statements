@@ -66,6 +66,40 @@ public class Main {
                                  String artistName,) throws SQLException{
         int artistId = -1;
         ps.setString(1,artistName);
-        int insertedCount = 
+        int insertedCount =ps.executeUpdate();
+        if(insertedCount > 0) {
+            ResultSet generatedKeys = ps.getGeneratedKeys();
+            if(generatedKeys.next()) {
+                artistId =generatedKeys.getInt(1);
+                System.out.println("Auto-incremented ID:"+ artistId);
+            }
+        }
+        return artistId;
+    }
+
+    private static int addAlbum(PreparedStatement ps,Connection connection,int artistId,
+                                 String albumName,) throws SQLException{
+        int albumId = -1;
+        ps.setInt(1,artistId);
+        ps.setString(2,albumName);
+        int insertedCount =ps.executeUpdate();
+        if(insertedCount > 0) {
+            ResultSet generatedKeys = ps.getGeneratedKeys();
+            if(generatedKeys.next()) {
+                albumId =generatedKeys.getInt(1);
+                System.out.println("Auto-incremented ID:"+ albumId);
+            }
+        }
+        return albumId;
+    }
+
+    private static int addSong(PreparedStatement ps,Connection conn,int albumId,
+                               int trackNo,String songTitle) throws SQLException{
+        int songId = -1;
+        ps.setInt(1,albumId);
+        ps.setInt(2,trackNo);
+        ps.setString(3,songTitle);
+        int insertCount = ps
+
     }
 }
