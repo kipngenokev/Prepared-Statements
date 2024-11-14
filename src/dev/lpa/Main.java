@@ -99,7 +99,17 @@ public class Main {
         ps.setInt(1,albumId);
         ps.setInt(2,trackNo);
         ps.setString(3,songTitle);
-        int insertCount = ps
+        int insertCount = ps.executeUpdate();
+
+        if(insertCount > 0){
+            ResultSet generatedKeys = ps.getGeneratedKeys();
+            if(generatedKeys.next()) {
+                songId = generatedKeys.getInt(1);
+                System.out.println("Auto-incremented ID :"+songId);
+
+            }
+        }
+        return songId;
 
     }
 }
