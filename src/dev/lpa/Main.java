@@ -77,18 +77,36 @@ public class Main {
         }
         return artistId;
     }
-    private static int addAlbum(PreparedStatement ps, Connection conn,String artistId
-                                 String albumName) throws SQLException{
-        int artistId = -1;
-        ps.setString(1,artistName);
-        int insertCount =ps.executeUpdate();
-        if(insertCount > 0) {
-            ResultSet generatedKeys = ps.getGeneratedKeys();
-            if(generatedKeys.next()) {
-                artistId = generatedKeys.getInt(1);
-                System.out.println("Auto-incremented ID:"+artistId);
+    private static int addAlbum(PreparedStatement ps,Connection conn, int artistId,
+                                String albumName) throws SQLException{
+        int albumId = -1;
+        ps.setInt(1,albumId);
+        ps.setString(2,albumName);
+        int insertedCount =ps.executeUpdate();
+        if(insertedCount > 0) {
+            ResultSet getGeneratedKeys = ps.getGeneratedKeys();
+            if(getGeneratedKeys.next()) {
+                albumId = getGeneratedKeys.getInt(1);
+                System.out.println("Auto-increment ID: "+albumId);
             }
         }
-        return artistId;
+        return albumId;
+    }
+
+    private static int addSong(PreparedStatement ps,Connection conn,int albumId,
+                               int trackNumber,String songTitle)throws SQLException {
+        int songId = -1;
+        ps.setInt(1,albumId);
+        ps.setInt(2,trackNumber);
+        ps.setString(3,songTitle);
+        int insertedCount = ps.executeUpdate();
+        if(insertedCount > 0) {
+            ResultSet generatedKey = ps.getGeneratedKeys();
+            if(generatedKey.next()) {
+                songId = generatedKey.getInt(1);
+                System.out.println("Auto-incremented ID:"+songId);
+            }
+        }
+        return songId;
     }
 }
