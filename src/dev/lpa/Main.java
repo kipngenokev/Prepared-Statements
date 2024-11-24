@@ -2,27 +2,27 @@ package dev.lpa;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.*;
+import java.util.List;
 
 public class Main {
+
     private static String ARTIST_INSERT =
             "INSERT INTO music.artists (artist_name) VALUES (?)";
     private static String ALBUM_INSERT =
-            "INSERT INTO music.albums (artist_id, album_name) VALUES (?, ?)";
+            "INSERT INTO music.albums (artist_id,album_name) VALUES (?, ?)";
     private static String SONG_INSERT =
-            "INSERT INTO music.songs (album_id, track_number, song_title) "+
-                    "VALUES (? ,? ,? )";
+            "INSERT INTO music.songs (album_id,track_number, song_title) "+
+                    "VALUES (?, ?, ?)";
 
     public static void main(String[] args) {
         var dataSource = new MysqlDataSource();
-
         dataSource.setServerName("localhost");
         dataSource.setPort(3306);
         dataSource.setDatabaseName("music");
-
         try {
             dataSource.setContinueBatchOnError(false);
         } catch (SQLException e) {
@@ -33,42 +33,49 @@ public class Main {
                 System.getenv("MYSQLUSER"),
                 System.getenv("MYSQLPASS"));
         ) {
-            String sql = "SELECT *FROM music.albumview WHERE artist_name =?";
+            addDataFromFile(connection);
+
+            String sql = "SELECT * FROM music.albumview WHERE artist_name = ?";
             PreparedStatement ps = connection.prepareStatement(sql);
-            ps.setString(1,"Elf");
+            ps.setString(1,"Bob Dylan");
             ResultSet resultSet = ps.executeQuery();
             printRecords(resultSet);
         }catch (SQLException e) {
             e.printStackTrace();
+
         }
     }
 
     private static boolean printRecords(ResultSet resultSet) throws SQLException{
-        boolean foundData=false;
+        boolean foundData = false;
         var meta = resultSet.getMetaData();
 
-        System.out.println("==============");
+        System.out.println("=============");
 
-        for(int i=1;i<= meta.getColumnCount();i++) {
-            System.out.printf("%-15s",meta.getColumnName(i));
+        for(int i = 1; i<= meta.getColumnCount();i++) {
+            System.out.printf("%-15s",meta.getColumnName(i).toUpperCase());
         }
+
         System.out.println();
+
         while(resultSet.next()) {
-            for (int i = 1; i <= meta.getColumnCount(); i++) {
-                System.out.printf("%-15s", resultSet.getString(i));
+            for(int i=1;i<=meta.getColumnCount();i++) {
+                System.out.printf("%-15s",resultSet.getString(i));
+
+                foundData = true;
             }
             System.out.println();
-            foundData = true;
         }
+
         return foundData;
     }
 
-    private static int addArtist(PreparedStatement ps, Connection conn,
+    private static int addArtist(PreparedStatement ps,Connection conn,
                                  String artistName) throws SQLException{
         int artistId = -1;
         ps.setString(1,artistName);
-        int insertCount =ps.executeUpdate();
-        if(insertCount > 0) {
+        int insertedCount = ps.executeUpdate();
+        if(insertedCount > 0) {
             ResultSet generatedKeys = ps.getGeneratedKeys();
             if(generatedKeys.next()) {
                 artistId = generatedKeys.getInt(1);
@@ -77,36 +84,79 @@ public class Main {
         }
         return artistId;
     }
-    private static int addAlbum(PreparedStatement ps,Connection conn, int artistId,
-                                String albumName) throws SQLException{
+
+    private static int addAlbum(PreparedStatement ps,Connection conn,
+                                int artistId,String albumName)throws SQLException{
         int albumId = -1;
-        ps.setInt(1,albumId);
+        ps.setInt(1,artistId);
         ps.setString(2,albumName);
-        int insertedCount =ps.executeUpdate();
-        if(insertedCount > 0) {
-            ResultSet getGeneratedKeys = ps.getGeneratedKeys();
-            if(getGeneratedKeys.next()) {
-                albumId = getGeneratedKeys.getInt(1);
-                System.out.println("Auto-increment ID: "+albumId);
+        int insertedCount = ps.executeUpdate();
+        if(insertedCount > 0 ) {
+            ResultSet generatedKeys = ps.getGeneratedKeys();
+            if(generatedKeys.next()) {
+                albumId=generatedKeys.getInt(1);
+                System.out.println("Auto-incremented ID:"+albumId);
             }
         }
         return albumId;
     }
 
-    private static int addSong(PreparedStatement ps,Connection conn,int albumId,
-                               int trackNumber,String songTitle)throws SQLException {
+    private static int addSong(PreparedStatement ps ,Connection conn,
+                               int albumId,int trackNumber,String songTitle)
+        throws SQLException{
         int songId = -1;
         ps.setInt(1,albumId);
         ps.setInt(2,trackNumber);
         ps.setString(3,songTitle);
         int insertedCount = ps.executeUpdate();
         if(insertedCount > 0) {
-            ResultSet generatedKey = ps.getGeneratedKeys();
-            if(generatedKey.next()) {
-                songId = generatedKey.getInt(1);
+            ResultSet generatedKeys =ps.getGeneratedKeys();
+            if(generatedKeys.next()) {
+                songId = generatedKeys.getInt(1);
                 System.out.println("Auto-incremented ID:"+songId);
             }
         }
         return songId;
+    }
+
+    private static void addDataFromFile(Connection conn) throws SQLException{
+        List<String> records = null;
+        try {
+            records = Files.readAllLines(Path.of("NewAlbums.csv"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String lastAlbum = null;
+        String lastArtist = null;
+        int artistId = -1;
+        int albumId = -1;
+
+        try(PreparedStatement psArtist = conn.prepareStatement(ARTIST_INSERT,
+                Statement.RETURN_GENERATED_KEYS);
+        PreparedStatement psAlbum = conn.prepareStatement(ALBUM_INSERT,
+                Statement.RETURN_GENERATED_KEYS);
+        PreparedStatement psSong = conn.prepareStatement(SONG_INSERT,
+                Statement.RETURN_GENERATED_KEYS);
+        ) {
+            conn.setAutoCommit(false);
+            for (String record : records){
+                String[] columns =record.split(",");
+                if(lastArtist == null || !lastArtist.equals(columns[0])) {
+                    lastArtist = columns[0];
+                    artistId = addArtist(psArtist,conn,lastArtist);
+                }
+                if(lastAlbum ==null ||!lastAlbum.equals(columns[1])) {
+                    lastAlbum = columns[1];
+                    albumId = addAlbum(psAlbum,conn,artistId,lastAlbum);
+                }
+                addSong(psSong,conn,albumId,
+                        Integer.parseInt(columns[2]),columns[3]);
+            }
+            conn.commit();
+            conn.setAutoCommit(true);
+        }catch (SQLException e){
+            conn.rollback();
+            throw new RuntimeException (e);
+        }
     }
 }
