@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
+import java.util.Arrays;
 import java.util.List;
 
 public class Main{
@@ -32,9 +33,10 @@ public class Main{
         }
 
         try(Connection connection =dataSource.getConnection()){
+            addDataFromFile(connection);
             String sql = "SELECT *FROM music.albumview WHERE artist_name =?";
             PreparedStatement ps = connection.prepareStatement(sql);
-            ps.setString(1,"Elf");
+            ps.setString(1,"Bob Dylan");
             ResultSet resultSet = ps.executeQuery();
             printRecords(resultSet);
         }catch (SQLException e){
@@ -92,21 +94,13 @@ public class Main{
         return albumId;
     }
 
-    private static int addSong(PreparedStatement ps ,Connection connection,int albumId,
+    private static void addSong(PreparedStatement ps ,Connection connection,int albumId,
                                int trackNumber,String songTitle) throws SQLException{
-        int songId = -1;
         ps.setInt(1,albumId);
         ps.setInt(2,trackNumber);
         ps.setString(3,songTitle);
-        int insertedCount = ps.executeUpdate();
-        if(insertedCount > 0) {
-            ResultSet generatedKeys = ps.getGeneratedKeys();
-            if(generatedKeys.next()) {
-                songId = generatedKeys.getInt(1);
-                System.out.println("Auto-incremented ID:"+songId);
-            }
-        }
-        return songId;
+
+        ps.addBatch();
     }
 
     private static void addDataFromFile(Connection conn) throws SQLException{
@@ -130,7 +124,24 @@ public class Main{
         PreparedStatement psSong = conn.prepareStatement(SONG_INSERT,
                 Statement.RETURN_GENERATED_KEYS);
         ) {
-
+            conn.setAutoCommit(false);
+            for(String record :records) {
+                String[] columns = record.split(",");
+                if(lastArtist == null || !lastArtist.equals(columns[0])) {
+                    lastArtist = columns[0];
+                    artistId = addArtist(psArtist,conn,lastArtist);
+                }
+                if(lastAlbum == null || !lastAlbum.equals(columns[1])) {
+                    lastAlbum = columns[1];
+                    albumId = addAlbum(psAlbum ,conn,artistId,lastAlbum);
+                }
+                addSong(psSong,conn,albumId,Integer.parseInt(columns[2]),columns[3]);
+            }
+            int[] inserts = psSong.executeBatch();
+            int totalInserts = Arrays.stream(inserts).sum();
+            System.out.printf("%d song records added %n",inserts.length);
+            conn.commit();
+            conn.setAutoCommit(true);
         }catch (SQLException e) {
             conn.rollback();
             throw new RuntimeException(e);
